@@ -45,49 +45,56 @@ export default function InventoryPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  async function loadInventory() {
-    const supabase = createClient();
+async function loadInventory() {
+  const supabase = createClient();
 
-    const [
-      { data: productData },
-      { data: accountData },
-      { data: profileData },
-    ] = await Promise.all([
-      supabase.from("products").select("id, name"),
-      supabase.from("accounts").select("*").order("created_at"),
-      supabase
-  .from("profiles")
-  .select(`
-    id,
-    profile_name,
-    pin,
-    status,
-    expires_at,
-    created_at,
-    accounts (
-      id,
-      email,
-      product_id,
-      products (
-        name
-      )
-    )
-  `)
-  .order("created_at", {
-    ascending: false,
-  }),
-    ]);
+  const [
+    { data: productData, error: productError },
+    { data: accountData, error: accountError },
+    { data: profileData, error: profileError },
+  ] = await Promise.all([
+    supabase.from("products").select("id, name"),
+    supabase.from("accounts").select("*").order("created_at"),
+    supabase
+      .from("profiles")
+      .select(`
+        id,
+        profile_name,
+        pin,
+        status,
+        expires_at,
+        created_at,
+        accounts (
+          id,
+          email,
+          product_id,
+          products (
+            name
+          )
+        )
+      `)
+      .order("created_at", {
+        ascending: false,
+      }),
+  ]);
 
-    setProducts(productData ?? []);
-    setAccounts(accountData ?? []);
-    setProfiles(profileData ?? []);
-    setLoading(false);
+  if (productError) {
+    console.error("Product error:", productError);
   }
 
-  useEffect(() => {
-    loadInventory();
-  }, []);
+  if (accountError) {
+    console.error("Account error:", accountError);
+  }
 
+  if (profileError) {
+    console.error("Profile error:", profileError);
+  }
+
+  setProducts(productData ?? []);
+  setAccounts(accountData ?? []);
+  setProfiles(profileData ?? []);
+  setLoading(false);
+}
   async function addAccount() {
     if (!productId || !email || !password) {
       alert("Produk, email, dan password wajib diisi.");
