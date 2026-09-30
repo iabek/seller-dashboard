@@ -369,7 +369,7 @@ bot.action("payment:proof", async (ctx) => {
 });
 
 bot.start(async (ctx) => {
-  const supabase = createServerClient();
+  const supabase = createAdminClient();
 
   const telegramUserId = ctx.from.id;
   const telegramUsername =
