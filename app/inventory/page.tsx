@@ -48,54 +48,22 @@ export default function InventoryPage() {
 async function loadInventory() {
   const supabase = createClient();
 
-  console.log("Inventory: mulai load");
+  const { data: productData } = await supabase
+    .from("products")
+    .select("id, name");
 
-  const { data: productData, error: productError } =
-    await supabase
-      .from("products")
-      .select("id, name");
-
-  console.log("Products:", productData, productError);
-
-  const { data: accountData, error: accountError } =
-    await supabase
-      .from("accounts")
-      .select("*")
-      .order("created_at");
-
-  console.log("Accounts:", accountData, accountError);
-
-  const { data: profileData, error: profileError } =
-    await supabase
-      .from("profiles")
-      .select(`
-        id,
-        profile_name,
-        pin,
-        status,
-        expires_at,
-        created_at,
-        accounts (
-          id,
-          email,
-          product_id,
-          products (
-            name
-          )
-        )
-      `)
-      .order("created_at", {
-        ascending: false,
-      });
-
-  console.log("Profiles:", profileData, profileError);
+  const { data: accountData } = await supabase
+    .from("accounts")
+    .select("*")
+    .order("created_at");
 
   setProducts(productData ?? []);
   setAccounts(accountData ?? []);
-  setProfiles(profileData ?? []);
-  setLoading(false);
 
-  console.log("Inventory: selesai load");
+  // Untuk sementara kita tidak mengambil profiles.
+  setProfiles([]);
+
+  setLoading(false);
 }
 
   async function addAccount() {
