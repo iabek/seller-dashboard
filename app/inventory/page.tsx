@@ -48,14 +48,25 @@ export default function InventoryPage() {
 async function loadInventory() {
   const supabase = createClient();
 
-  const [
-    { data: productData, error: productError },
-    { data: accountData, error: accountError },
-    { data: profileData, error: profileError },
-  ] = await Promise.all([
-    supabase.from("products").select("id, name"),
-    supabase.from("accounts").select("*").order("created_at"),
-    supabase
+  console.log("Inventory: mulai load");
+
+  const { data: productData, error: productError } =
+    await supabase
+      .from("products")
+      .select("id, name");
+
+  console.log("Products:", productData, productError);
+
+  const { data: accountData, error: accountError } =
+    await supabase
+      .from("accounts")
+      .select("*")
+      .order("created_at");
+
+  console.log("Accounts:", accountData, accountError);
+
+  const { data: profileData, error: profileError } =
+    await supabase
       .from("profiles")
       .select(`
         id,
@@ -75,26 +86,18 @@ async function loadInventory() {
       `)
       .order("created_at", {
         ascending: false,
-      }),
-  ]);
+      });
 
-  if (productError) {
-    console.error("Product error:", productError);
-  }
-
-  if (accountError) {
-    console.error("Account error:", accountError);
-  }
-
-  if (profileError) {
-    console.error("Profile error:", profileError);
-  }
+  console.log("Profiles:", profileData, profileError);
 
   setProducts(productData ?? []);
   setAccounts(accountData ?? []);
   setProfiles(profileData ?? []);
   setLoading(false);
+
+  console.log("Inventory: selesai load");
 }
+
   async function addAccount() {
     if (!productId || !email || !password) {
       alert("Produk, email, dan password wajib diisi.");
