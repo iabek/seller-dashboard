@@ -18,19 +18,12 @@ type Account = {
 
 type Profile = {
   id: string;
+  account_id: string;
   profile_name: string | null;
   pin: string | null;
   status: string;
   expires_at: string | null;
   created_at: string;
-  accounts: {
-    id: string;
-    email: string | null;
-    product_id: string;
-    products: {
-      name: string;
-    }[];
-  }[];
 };
 
 export default function InventoryPage() {
@@ -69,26 +62,18 @@ export default function InventoryPage() {
         .select("id, product_id, email, status, notes")
         .order("email"),
 
-      supabase
-        .from("profiles")
-        .select(`
-          id,
-          profile_name,
-          pin,
-          status,
-          expires_at,
-          created_at,
-          accounts (
-            id,
-            email,
-            product_id,
-            products (
-              name
-            )
-          )
-        `)
-        .order("created_at", { ascending: false }),
-    ]);
+supabase
+  .from("profiles")
+  .select(`
+    id,
+    account_id,
+    profile_name,
+    pin,
+    status,
+    expires_at,
+    created_at
+  `)
+  .order("created_at", { ascending: false }),
 
     if (productError) {
       console.error("Product error:", productError);
@@ -179,13 +164,11 @@ export default function InventoryPage() {
     );
   }
 
-  function getAccountProfiles(accountId: string) {
-    return profiles.filter((profile) =>
-      profile.accounts?.some(
-        (account) => account.id === accountId
-      )
-    );
-  }
+function getAccountProfiles(accountId: string) {
+  return profiles.filter(
+    (profile) => profile.account_id === accountId
+  );
+}
 
   const totalProfiles = profiles.length;
 
@@ -458,9 +441,9 @@ export default function InventoryPage() {
                             <div className="flex items-start justify-between">
                               <div>
                                 <p className="text-xs text-gray-500">
-                                  {profile.accounts?.[0]
-                                    ?.products?.[0]?.name ??
-                                    "Product"}
+                                  {getProductName(
+  profile.account_id
+)}
                                 </p>
 
                                 <h3 className="mt-1 text-lg font-semibold">
@@ -468,8 +451,9 @@ export default function InventoryPage() {
                                 </h3>
 
                                 <p className="text-sm text-gray-500">
-                                  {profile.accounts?.[0]
-                                    ?.email ?? "-"}
+                                  {accounts.find(
+  (account) => account.id === profile.account_id
+)?.email ?? "-"}
                                 </p>
                               </div>
 
