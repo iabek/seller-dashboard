@@ -62,18 +62,21 @@ export default function InventoryPage() {
         .select("id, product_id, email, status, notes")
         .order("email"),
 
-supabase
-  .from("profiles")
-  .select(`
-    id,
-    account_id,
-    profile_name,
-    pin,
-    status,
-    expires_at,
-    created_at
-  `)
-  .order("created_at", { ascending: false }),
+      supabase
+        .from("profiles")
+        .select(`
+          id,
+          account_id,
+          profile_name,
+          pin,
+          status,
+          expires_at,
+          created_at
+        `)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    if (productError) {
 
     if (productError) {
       console.error("Product error:", productError);
