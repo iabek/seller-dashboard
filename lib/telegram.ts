@@ -1294,6 +1294,44 @@ bot.action("menu:products", async (ctx) => {
     "🛍️ Produk yang terbaca bot:",
     Markup.inlineKeyboard(buttons)
   );
+bot.action("menu:products", async (ctx) => {
+  await ctx.answerCbQuery();
+
+  const supabase = createAdminClient();
+
+  const { data: products, error } = await supabase
+    .from("products")
+    .select("id, name, description, active, created_at")
+    .order("created_at", {
+      ascending: true,
+    });
+
+  if (error) {
+    await ctx.reply(
+      `❌ DATABASE ERROR\n\n${error.message}`
+    );
+    return;
+  }
+
+  if (!products || products.length === 0) {
+    await ctx.reply(
+      "❌ Query berhasil, tapi tabel products kosong."
+    );
+    return;
+  }
+
+  const productText = products
+    .map(
+      (product) =>
+        `📦 ${product.name}\n` +
+        `ID: ${product.id}\n` +
+        `Active: ${product.active}\n`
+    )
+    .join("\n");
+
+  await ctx.reply(
+    `🔎 HASIL CEK DATABASE\n\n${productText}`
+  );
 });
 
 bot.action("menu:orders", async (ctx) => {
