@@ -131,7 +131,9 @@ bot.action(/^plan:(.+)$/, async (ctx) => {
 bot.action(/^product:(.+)$/, async (ctx) => {
   const productId = ctx.match[1];
 
-  const supabase = createServerClient();
+  // Pakai admin client supaya bot bisa membaca
+  // produk dan paket tanpa terkena RLS.
+  const supabase = createAdminClient();
 
   const { data: product, error: productError } =
     await supabase
@@ -142,6 +144,11 @@ bot.action(/^product:(.+)$/, async (ctx) => {
       .single();
 
   if (productError || !product) {
+    console.error(
+      "Product error:",
+      productError
+    );
+
     await ctx.answerCbQuery(
       "Produk tidak ditemukan."
     );
@@ -282,53 +289,53 @@ bot.action(/^payment:(DANA|GoPay|OVO|QRIS)$/, async (ctx) => {
       .eq("id", plan.product_id)
       .single();
 
-if (!product) {
-  await ctx.answerCbQuery(
-    "Produk tidak ditemukan."
-  );
+  if (!product) {
+    await ctx.answerCbQuery(
+      "Produk tidak ditemukan."
+    );
 
-  return;
-}
+    return;
+  }
 
-const { data: customer, error: customerError } =
-  await supabase
-    .from("customers")
-    .select("id")
-    .eq("telegram_user_id", ctx.from.id)
-    .single();
+  const { data: customer, error: customerError } =
+    await supabase
+      .from("customers")
+      .select("id")
+      .eq("telegram_user_id", ctx.from.id)
+      .single();
 
-if (customerError || !customer) {
-  await ctx.reply(
-    "Akun kamu belum terdaftar. Silakan kirim /start terlebih dahulu."
-  );
+  if (customerError || !customer) {
+    await ctx.reply(
+      "Akun kamu belum terdaftar. Silakan kirim /start terlebih dahulu."
+    );
 
-  return;
-}
+    return;
+  }
 
-const { data: orderId, error } =
-  await supabase.rpc(
-    "create_new_order",
-    {
-      p_customer_id: customer.id,
-      p_plan_id: planId,
-      p_payment_method: paymentMethod,
-    }
-  );
+  const { data: orderId, error } =
+    await supabase.rpc(
+      "create_new_order",
+      {
+        p_customer_id: customer.id,
+        p_plan_id: planId,
+        p_payment_method: paymentMethod,
+      }
+    );
 
-if (error) {
-  console.error(
-    "create_new_order error:",
-    error
-  );
+  if (error) {
+    console.error(
+      "create_new_order error:",
+      error
+    );
 
-  await ctx.reply(
-    "Gagal membuat pesanan."
-  );
+    await ctx.reply(
+      "Gagal membuat pesanan."
+    );
 
-  return;
-}
+    return;
+  }
 
-ctx.session.orderId = orderId;
+  ctx.session.orderId = orderId;
 
   await ctx.answerCbQuery();
 
@@ -403,50 +410,50 @@ bot.start(async (ctx) => {
     return;
   }
 
-await ctx.reply(
-  "Selamat datang! 👋\n\n" +
-    "Silakan pilih menu di bawah:",
-  mainMenu()
-);
-
-const { data: products, error: productError } =
-  await supabase
-    .from("products")
-    .select("id, name")
-    .eq("active", true)
-    .order("created_at");
-
-if (productError) {
-  console.error(productError);
-  return;
-}
-
-if (!products || products.length === 0) {
   await ctx.reply(
-    "Saat ini belum ada produk yang tersedia."
+    "Selamat datang! 👋\n\n" +
+      "Silakan pilih menu di bawah:",
+    mainMenu()
   );
 
-  return;
-}
+  const { data: products, error: productError } =
+    await supabase
+      .from("products")
+      .select("id, name")
+      .eq("active", true)
+      .order("created_at");
 
-await ctx.reply(
-  "🛍 Pilih Produk:",
-  Markup.inlineKeyboard(
-    products.map((product) => [
-      Markup.button.callback(
-        product.name,
-        `product:${product.id}`
-      ),
-    ])
-  )
-);
+  if (productError) {
+    console.error(productError);
+    return;
+  }
+
+  if (!products || products.length === 0) {
+    await ctx.reply(
+      "Saat ini belum ada produk yang tersedia."
+    );
+
+    return;
+  }
+
+  await ctx.reply(
+    "🛍 Pilih Produk:",
+    Markup.inlineKeyboard(
+      products.map((product) => [
+        Markup.button.callback(
+          product.name,
+          `product:${product.id}`
+        ),
+      ])
+    )
+  );
 });
+
 bot.on("photo", async (ctx) => {
   const supabase = createServerClient();
 
   const telegramUserId = ctx.from.id;
 
-  // Cari customer berdasarkan Telegram ID
   const { data: customer, error: customerError } =
     await supabase
       .from("customers")
@@ -465,7 +472,6 @@ bot.on("photo", async (ctx) => {
     return;
   }
 
-  // Cari order yang sedang menunggu pembayaran
   const { data: order, error: orderError } =
     await supabase
       .from("orders")
@@ -496,7 +502,6 @@ bot.on("photo", async (ctx) => {
     return;
   }
 
-  // Ambil foto dengan resolusi terbesar
   const photos = ctx.message.photo;
 
   const largestPhoto =
@@ -505,11 +510,9 @@ bot.on("photo", async (ctx) => {
   const fileId = largestPhoto.file_id;
 
   try {
-    // Ambil URL file dari Telegram
     const fileLink =
       await ctx.telegram.getFileLink(fileId);
 
-    // Download file dari Telegram
     const response = await fetch(
       fileLink.toString()
     );
@@ -527,7 +530,6 @@ bot.on("photo", async (ctx) => {
     const filePath =
       `proofs/${order.id}-${Date.now()}.jpg`;
 
-    // Upload ke Supabase Storage
     const { error: uploadError } =
       await supabase.storage
         .from("payment-proofs")
@@ -542,12 +544,12 @@ bot.on("photo", async (ctx) => {
 
     if (uploadError) {
       console.error(uploadError);
+
       throw new Error(
         "Gagal upload bukti pembayaran."
       );
     }
 
-    // Simpan record bukti pembayaran
     const { error: proofError } =
       await supabase
         .from("payment_proofs")
@@ -558,12 +560,12 @@ bot.on("photo", async (ctx) => {
 
     if (proofError) {
       console.error(proofError);
+
       throw new Error(
         "Gagal menyimpan data bukti."
       );
     }
 
-    // Ubah status order
     const { error: updateError } =
       await supabase
         .from("orders")
@@ -574,6 +576,7 @@ bot.on("photo", async (ctx) => {
 
     if (updateError) {
       console.error(updateError);
+
       throw new Error(
         "Gagal mengubah status order."
       );
@@ -607,7 +610,6 @@ async function showStatus(ctx: any) {
 
     const supabase = createAdminClient();
 
-    // Cari customer
     const { data: customer, error: customerError } =
       await supabase
         .from("customers")
@@ -623,7 +625,6 @@ async function showStatus(ctx: any) {
       return;
     }
 
-    // Ambil semua order aktif
     const { data: orders, error: ordersError } =
       await supabase
         .from("orders")
@@ -671,7 +672,7 @@ async function showStatus(ctx: any) {
     if (!orders || orders.length === 0) {
       await ctx.reply(
         "🔐 *Akses Saya*\n\n" +
-        "Kamu belum memiliki akses aktif.",
+          "Kamu belum memiliki akses aktif.",
         {
           parse_mode: "Markdown",
           ...mainMenu(),
@@ -683,7 +684,6 @@ async function showStatus(ctx: any) {
 
     const now = new Date();
 
-    // Tandai order yang sudah expired
     for (const order of orders) {
       if (
         order.expires_at &&
@@ -708,7 +708,6 @@ async function showStatus(ctx: any) {
       }
     }
 
-    // Ambil lagi yang benar-benar masih aktif
     const { data: activeOrders } =
       await supabase
         .from("orders")
@@ -741,7 +740,7 @@ async function showStatus(ctx: any) {
     if (!activeOrders || activeOrders.length === 0) {
       await ctx.reply(
         "🔐 *Akses Saya*\n\n" +
-        "Tidak ada akses aktif.",
+          "Tidak ada akses aktif.",
         {
           parse_mode: "Markdown",
           ...mainMenu(),
@@ -783,7 +782,7 @@ async function showStatus(ctx: any) {
 
     await ctx.reply(
       "🔐 *Akses Saya*\n\n" +
-      sections.join("\n\n────────────\n\n"),
+        sections.join("\n\n────────────\n\n"),
       {
         parse_mode: "Markdown",
         ...Markup.inlineKeyboard([
@@ -808,7 +807,6 @@ async function showStatus(ctx: any) {
         ]),
       }
     );
-
   } catch (error) {
     console.error(
       "showStatus error:",
@@ -844,6 +842,7 @@ async function showOrders(ctx: any) {
       await ctx.reply(
         "Kamu belum terdaftar.\n\nSilakan tekan /start terlebih dahulu."
       );
+
       return;
     }
 
@@ -872,7 +871,11 @@ async function showOrders(ctx: any) {
 
     if (error) {
       console.error("Orders error:", error);
-      await ctx.reply("Gagal mengambil pesanan.");
+
+      await ctx.reply(
+        "Gagal mengambil pesanan."
+      );
+
       return;
     }
 
@@ -884,6 +887,7 @@ async function showOrders(ctx: any) {
           ...mainMenu(),
         }
       );
+
       return;
     }
 
@@ -920,7 +924,10 @@ async function showOrders(ctx: any) {
       }
     );
   } catch (error) {
-    console.error("showOrders error:", error);
+    console.error(
+      "showOrders error:",
+      error
+    );
   }
 }
 
@@ -951,12 +958,13 @@ bot.action(
         await ctx.reply(
           "Customer tidak ditemukan."
         );
+
         return;
       }
 
       const { data: order, error }: any =
-  await supabase
-    .from("orders")
+        await supabase
+          .from("orders")
           .select(`
             id,
             amount,
@@ -981,6 +989,7 @@ bot.action(
         await ctx.reply(
           "Pesanan tidak ditemukan."
         );
+
         return;
       }
 
@@ -1054,7 +1063,7 @@ bot.action(
         `▶️ Mulai: ${startAt}\n` +
         `⏰ Berakhir: ${expiresAt}`;
 
-      const buttons = [];
+      const buttons: any[] = [];
 
       if (
         order.status === "WAITING_PAYMENT"
@@ -1100,7 +1109,6 @@ bot.command("orders", async (ctx) => {
   const telegramUserId = ctx.from.id;
 
   try {
-    // Cari customer
     const { data: customer, error: customerError } =
       await supabase
         .from("customers")
@@ -1116,7 +1124,6 @@ bot.command("orders", async (ctx) => {
       return;
     }
 
-    // Ambil semua order customer
     const { data: orders, error: ordersError } =
       await supabase
         .from("orders")
@@ -1187,8 +1194,8 @@ bot.command("orders", async (ctx) => {
           break;
 
         case "CANCELLED":
-  statusText = "⚪ Dibatalkan";
-  break;
+          statusText = "⚪ Dibatalkan";
+          break;
       }
 
       const createdAt =
@@ -1244,58 +1251,48 @@ bot.command("orders", async (ctx) => {
   }
 });
 
+/*
+|--------------------------------------------------------------------------
+| MENU PRODUCTS
+|--------------------------------------------------------------------------
+*/
+
 bot.action("menu:products", async (ctx) => {
   await ctx.answerCbQuery();
 
-  const supabase = createServerClient();
+  const supabase = createAdminClient();
 
-  const { data: products, error } =
-    await supabase
-      .from("products")
-      .select("id, name, description")
-      .eq("active", true)
-      .order("created_at", {
-        ascending: true,
-      });
+  const { data: products, error } = await supabase
+    .from("products")
+    .select("*");
+
+  console.log("=== DEBUG PRODUCTS ===");
+  console.log("products:", products);
+  console.log("error:", error);
+  console.log("======================");
 
   if (error) {
-    console.error(error);
-
-    await ctx.reply(
-      "❌ Gagal mengambil daftar produk."
-    );
-
+    await ctx.reply(`❌ Error database:\n${error.message}`);
     return;
   }
 
   if (!products || products.length === 0) {
     await ctx.reply(
-      "Saat ini belum ada produk yang tersedia."
+      "❌ Database bot benar-benar tidak menemukan produk."
     );
-
     return;
   }
 
   const buttons = products.map((product) => [
     Markup.button.callback(
-      product.name,
+      `${product.name} | active=${product.active}`,
       `product:${product.id}`
     ),
   ]);
 
-  buttons.push([
-    Markup.button.callback(
-      "⬅️ Kembali",
-      "menu:main"
-    ),
-  ]);
-
   await ctx.editMessageText(
-    "🛍️ *Pilih produk:*",
-    {
-      parse_mode: "Markdown",
-      ...Markup.inlineKeyboard(buttons),
-    }
+    "🛍️ Produk yang terbaca bot:",
+    Markup.inlineKeyboard(buttons)
   );
 });
 
@@ -1343,6 +1340,7 @@ bot.action("renew", async (ctx) => {
       await ctx.reply(
         "Kamu belum terdaftar.\n\nSilakan tekan /start terlebih dahulu."
       );
+
       return;
     }
 
@@ -1366,7 +1364,11 @@ bot.action("renew", async (ctx) => {
 
     if (error) {
       console.error("Renewal error:", error);
-      await ctx.reply("Gagal mengambil akses aktif.");
+
+      await ctx.reply(
+        "Gagal mengambil akses aktif."
+      );
+
       return;
     }
 
@@ -1375,6 +1377,7 @@ bot.action("renew", async (ctx) => {
         "Kamu tidak memiliki akses aktif yang bisa diperpanjang.",
         mainMenu()
       );
+
       return;
     }
 
@@ -1397,7 +1400,7 @@ bot.action("renew", async (ctx) => {
 
     await ctx.editMessageText(
       "🔄 *Perpanjang Akses*\n\n" +
-      "Pilih akses yang ingin kamu perpanjang:",
+        "Pilih akses yang ingin kamu perpanjang:",
       {
         parse_mode: "Markdown",
         ...Markup.inlineKeyboard(buttons),
@@ -1436,6 +1439,7 @@ bot.action(/^renewproduct:(.+)$/, async (ctx) => {
       await ctx.reply(
         "Akses tersebut sudah tidak aktif."
       );
+
       return;
     }
 
@@ -1469,6 +1473,7 @@ bot.action(/^renewproduct:(.+)$/, async (ctx) => {
       await ctx.reply(
         "Belum ada paket renewal untuk produk ini."
       );
+
       return;
     }
 
@@ -1490,7 +1495,7 @@ bot.action(/^renewproduct:(.+)$/, async (ctx) => {
 
     await ctx.editMessageText(
       `🔄 *Renew ${order.products?.name ?? "Produk"}*\n\n` +
-      "Pilih durasi perpanjangan:",
+        "Pilih durasi perpanjangan:",
       {
         parse_mode: "Markdown",
         ...Markup.inlineKeyboard(buttons),
@@ -1534,6 +1539,7 @@ bot.action(
         await ctx.reply(
           "Akses tersebut sudah tidak aktif."
         );
+
         return;
       }
 
@@ -1551,6 +1557,7 @@ bot.action(
         await ctx.reply(
           "Paket renewal tidak ditemukan."
         );
+
         return;
       }
 
@@ -1565,33 +1572,33 @@ bot.action(
 
       await ctx.editMessageText(
         `🔄 *Renew ${order.products?.name ?? "Produk"}*\n\n` +
-        `📋 ${plan.name}\n` +
-        `💰 Rp${Number(
-          plan.price
-        ).toLocaleString("id-ID")}\n\n` +
-        "Pilih metode pembayaran:",
+          `📋 ${plan.name}\n` +
+          `💰 Rp${Number(
+            plan.price
+          ).toLocaleString("id-ID")}\n\n` +
+          "Pilih metode pembayaran:",
         {
           parse_mode: "Markdown",
           ...Markup.inlineKeyboard([
             [
               Markup.button.callback(
-  "DANA",
-  `renewpayment:DANA:${plan.id}:${order.id}`
-),
+                "DANA",
+                `renewpayment:DANA:${plan.id}:${order.id}`
+              ),
               Markup.button.callback(
-  "GoPay",
-  `renewpayment:GoPay:${plan.id}:${order.id}`
-),
+                "GoPay",
+                `renewpayment:GoPay:${plan.id}:${order.id}`
+              ),
             ],
             [
               Markup.button.callback(
-  "OVO",
-  `renewpayment:OVO:${plan.id}:${order.id}`
-),
+                "OVO",
+                `renewpayment:OVO:${plan.id}:${order.id}`
+              ),
               Markup.button.callback(
-  "QRIS",
-  `renewpayment:QRIS:${plan.id}:${order.id}`
-),
+                "QRIS",
+                `renewpayment:QRIS:${plan.id}:${order.id}`
+              ),
             ],
             [
               Markup.button.callback(
@@ -1622,7 +1629,6 @@ bot.action(
 
     const supabase = createAdminClient();
 
-    // Ambil order aktif
     const { data: order, error: orderError } =
       await supabase
         .from("orders")
@@ -1646,7 +1652,6 @@ bot.action(
       return;
     }
 
-    // Ambil plan
     const { data: plan, error: planError } =
       await supabase
         .from("plans")
@@ -1666,7 +1671,6 @@ bot.action(
       return;
     }
 
-    // Buat renewal order
     const { data: orderIdResult, error } =
       await supabase.rpc(
         "create_renewal_order",
