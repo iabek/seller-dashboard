@@ -77,8 +77,6 @@ export default function InventoryPage() {
     ]);
 
     if (productError) {
-
-    if (productError) {
       console.error("Product error:", productError);
     }
 
@@ -167,11 +165,15 @@ export default function InventoryPage() {
     );
   }
 
-function getAccountProfiles(accountId: string) {
-  return profiles.filter(
-    (profile) => profile.account_id === accountId
-  );
-}
+  function getAccountProfiles(accountId: string) {
+    return profiles.filter(
+      (profile) => profile.account_id === accountId
+    );
+  }
+
+  function getAccount(accountId: string) {
+    return accounts.find((account) => account.id === accountId);
+  }
 
   const totalProfiles = profiles.length;
 
@@ -325,8 +327,7 @@ function getAccountProfiles(accountId: string) {
           </div>
         ) : (
           accounts.map((account) => {
-            const accountProfiles =
-              getAccountProfiles(account.id);
+            const accountProfiles = getAccountProfiles(account.id);
 
             return (
               <div
@@ -391,9 +392,7 @@ function getAccountProfiles(accountId: string) {
                       </div>
 
                       <button
-                        onClick={() =>
-                          addProfile(account.id)
-                        }
+                        onClick={() => addProfile(account.id)}
                         className="mt-3 rounded-lg bg-black px-4 py-2 text-sm text-white"
                       >
                         Simpan Profile
@@ -425,16 +424,19 @@ function getAccountProfiles(accountId: string) {
                             "bg-gray-100 text-gray-700",
                         };
 
-                        const expiryText =
-                          profile.expires_at
-                            ? new Date(
-                                profile.expires_at
-                              ).toLocaleString("id-ID", {
-                                timeZone: "Asia/Jakarta",
-                                dateStyle: "medium",
-                                timeStyle: "short",
-                              })
-                            : "-";
+                        const expiryText = profile.expires_at
+                          ? new Date(
+                              profile.expires_at
+                            ).toLocaleString("id-ID", {
+                              timeZone: "Asia/Jakarta",
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })
+                          : "-";
+
+                        const profileAccount = getAccount(
+                          profile.account_id
+                        );
 
                         return (
                           <div
@@ -445,8 +447,8 @@ function getAccountProfiles(accountId: string) {
                               <div>
                                 <p className="text-xs text-gray-500">
                                   {getProductName(
-  profile.account_id
-)}
+                                    profileAccount?.product_id ?? ""
+                                  )}
                                 </p>
 
                                 <h3 className="mt-1 text-lg font-semibold">
@@ -454,9 +456,7 @@ function getAccountProfiles(accountId: string) {
                                 </h3>
 
                                 <p className="text-sm text-gray-500">
-                                  {accounts.find(
-  (account) => account.id === profile.account_id
-)?.email ?? "-"}
+                                  {profileAccount?.email ?? "-"}
                                 </p>
                               </div>
 
