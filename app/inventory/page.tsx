@@ -23,14 +23,14 @@ type Profile = {
   status: string;
   expires_at: string | null;
   created_at: string;
-accounts: {
-  id: string;
-  email: string | null;
-  product_id: string;
-  products: {
-    name: string;
+  accounts: {
+    id: string;
+    email: string | null;
+    product_id: string;
+    products: {
+      name: string;
+    }[];
   }[];
-}[];
 };
 
 export default function InventoryPage() {
@@ -40,31 +40,80 @@ export default function InventoryPage() {
 
   const [loading, setLoading] = useState(true);
   const [showAccountForm, setShowAccountForm] = useState(false);
+  const [showProfileForm, setShowProfileForm] = useState<string | null>(null);
 
   const [productId, setProductId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-async function loadInventory() {
-  const supabase = createClient();
+  const [profileName, setProfileName] = useState("");
+  const [profilePin, setProfilePin] = useState("");
 
-  const { data: productData } = await supabase
-    .from("products")
-    .select("id, name");
+  async function loadInventory() {
+    console.log("A: loadInventory mulai");
 
-  const { data: accountData } = await supabase
-    .from("accounts")
-    .select("*")
-    .order("created_at");
+    const supabase = createClient();
 
-  setProducts(productData ?? []);
-  setAccounts(accountData ?? []);
+    const [
+      { data: productData, error: productError },
+      { data: accountData, error: accountError },
+      { data: profileData, error: profileError },
+    ] = await Promise.all([
+      supabase
+        .from("products")
+        .select("id, name")
+        .order("name"),
 
-  // Untuk sementara kita tidak mengambil profiles.
-  setProfiles([]);
+      supabase
+        .from("accounts")
+        .select("id, product_id, email, status, notes")
+        .order("email"),
 
-  setLoading(false);
-}
+      supabase
+        .from("profiles")
+        .select(`
+          id,
+          profile_name,
+          pin,
+          status,
+          expires_at,
+          created_at,
+          accounts (
+            id,
+            email,
+            product_id,
+            products (
+              name
+            )
+          )
+        `)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    if (productError) {
+      console.error("Product error:", productError);
+    }
+
+    if (accountError) {
+      console.error("Account error:", accountError);
+    }
+
+    if (profileError) {
+      console.error("Profile error:", profileError);
+    }
+
+    setProducts(productData ?? []);
+    setAccounts(accountData ?? []);
+    setProfiles((profileData as Profile[]) ?? []);
+
+    setLoading(false);
+
+    console.log("B: inventory berhasil dimuat");
+  }
+
+  useEffect(() => {
+    loadInventory();
+  }, []);
 
   async function addAccount() {
     if (!productId || !email || !password) {
@@ -96,32 +145,32 @@ async function loadInventory() {
   }
 
   async function addProfile(accountId: string) {
-  if (!profileName || !profilePin) {
-    alert("Nama profile dan PIN wajib diisi.");
-    return;
+    if (!profileName || !profilePin) {
+      alert("Nama profile dan PIN wajib diisi.");
+      return;
+    }
+
+    const supabase = createClient();
+
+    const { error } = await supabase.from("profiles").insert({
+      account_id: accountId,
+      profile_name: profileName,
+      pin: profilePin,
+      status: "AVAILABLE",
+    });
+
+    if (error) {
+      console.error(error);
+      alert("Gagal menambahkan profile.");
+      return;
+    }
+
+    setProfileName("");
+    setProfilePin("");
+    setShowProfileForm(null);
+
+    await loadInventory();
   }
-
-  const supabase = createClient();
-
-  const { error } = await supabase.from("profiles").insert({
-    account_id: accountId,
-    profile_name: profileName,
-    pin: profilePin,
-    status: "AVAILABLE",
-  });
-
-  if (error) {
-    console.error(error);
-    alert("Gagal menambahkan profile.");
-    return;
-  }
-
-  setProfileName("");
-  setProfilePin("");
-  setShowProfileForm(null);
-
-  await loadInventory();
-}
 
   function getProductName(productId: string) {
     return (
@@ -130,28 +179,23 @@ async function loadInventory() {
     );
   }
 
-function getAccountProfiles(accountId: string) {
-  return profiles.filter(
-    (profile) =>
+  function getAccountProfiles(accountId: string) {
+    return profiles.filter((profile) =>
       profile.accounts?.some(
         (account) => account.id === accountId
       )
-  );
-}
+    );
+  }
 
-  const [showProfileForm, setShowProfileForm] = useState<string | null>(null);
-const [profileName, setProfileName] = useState("");
-const [profilePin, setProfilePin] = useState("");
+  const totalProfiles = profiles.length;
 
-const totalProfiles = profiles.length;
+  const availableProfiles = profiles.filter(
+    (profile) => profile.status === "AVAILABLE"
+  ).length;
 
-const availableProfiles = profiles.filter(
-  (profile) => profile.status === "AVAILABLE"
-).length;
-
-const activeProfiles = profiles.filter(
-  (profile) => profile.status === "ACTIVE"
-).length;
+  const activeProfiles = profiles.filter(
+    (profile) => profile.status === "ACTIVE"
+  ).length;
 
   if (loading) {
     return (
@@ -254,37 +298,37 @@ const activeProfiles = profiles.filter(
         </div>
       )}
 
-<div className="mb-6 grid gap-4 md:grid-cols-3">
-  <div className="rounded-xl border bg-white p-5">
-    <p className="text-sm text-gray-500">
-      Total Profiles
-    </p>
+      <div className="mb-6 mt-6 grid gap-4 md:grid-cols-3">
+        <div className="rounded-xl border bg-white p-5">
+          <p className="text-sm text-gray-500">
+            Total Profiles
+          </p>
 
-    <p className="mt-1 text-2xl font-bold">
-      {totalProfiles}
-    </p>
-  </div>
+          <p className="mt-1 text-2xl font-bold">
+            {totalProfiles}
+          </p>
+        </div>
 
-  <div className="rounded-xl border bg-white p-5">
-    <p className="text-sm text-gray-500">
-      Available
-    </p>
+        <div className="rounded-xl border bg-white p-5">
+          <p className="text-sm text-gray-500">
+            Available
+          </p>
 
-    <p className="mt-1 text-2xl font-bold">
-      {availableProfiles}
-    </p>
-  </div>
+          <p className="mt-1 text-2xl font-bold">
+            {availableProfiles}
+          </p>
+        </div>
 
-  <div className="rounded-xl border bg-white p-5">
-    <p className="text-sm text-gray-500">
-      Active
-    </p>
+        <div className="rounded-xl border bg-white p-5">
+          <p className="text-sm text-gray-500">
+            Active
+          </p>
 
-    <p className="mt-1 text-2xl font-bold">
-      {activeProfiles}
-    </p>
-  </div>
-</div>
+          <p className="mt-1 text-2xl font-bold">
+            {activeProfiles}
+          </p>
+        </div>
+      </div>
 
       <div className="mt-8 space-y-4">
         {accounts.length === 0 ? (
@@ -295,7 +339,8 @@ const activeProfiles = profiles.filter(
           </div>
         ) : (
           accounts.map((account) => {
-            const accountProfiles = getAccountProfiles(account.id);
+            const accountProfiles =
+              getAccountProfiles(account.id);
 
             return (
               <div
@@ -324,43 +369,51 @@ const activeProfiles = profiles.filter(
                   </p>
 
                   <button
-  onClick={() =>
-    setShowProfileForm(
-      showProfileForm === account.id ? null : account.id
-    )
-  }
-  className="mt-3 rounded-lg border px-3 py-2 text-sm"
->
-  + Tambah Profile
-</button>
+                    onClick={() =>
+                      setShowProfileForm(
+                        showProfileForm === account.id
+                          ? null
+                          : account.id
+                      )
+                    }
+                    className="mt-3 rounded-lg border px-3 py-2 text-sm"
+                  >
+                    + Tambah Profile
+                  </button>
 
-{showProfileForm === account.id && (
-  <div className="mt-4 rounded-lg bg-gray-50 p-4">
-    <div className="grid gap-3 md:grid-cols-2">
-      <input
-        value={profileName}
-        onChange={(e) => setProfileName(e.target.value)}
-        placeholder="Nama profile"
-        className="rounded-lg border px-4 py-2"
-      />
+                  {showProfileForm === account.id && (
+                    <div className="mt-4 rounded-lg bg-gray-50 p-4">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <input
+                          value={profileName}
+                          onChange={(e) =>
+                            setProfileName(e.target.value)
+                          }
+                          placeholder="Nama profile"
+                          className="rounded-lg border px-4 py-2"
+                        />
 
-      <input
-        value={profilePin}
-        onChange={(e) => setProfilePin(e.target.value)}
-        placeholder="PIN"
-        maxLength={6}
-        className="rounded-lg border px-4 py-2"
-      />
-    </div>
+                        <input
+                          value={profilePin}
+                          onChange={(e) =>
+                            setProfilePin(e.target.value)
+                          }
+                          placeholder="PIN"
+                          maxLength={6}
+                          className="rounded-lg border px-4 py-2"
+                        />
+                      </div>
 
-    <button
-      onClick={() => addProfile(account.id)}
-      className="mt-3 rounded-lg bg-black px-4 py-2 text-sm text-white"
-    >
-      Simpan Profile
-    </button>
-  </div>
-)}
+                      <button
+                        onClick={() =>
+                          addProfile(account.id)
+                        }
+                        className="mt-3 rounded-lg bg-black px-4 py-2 text-sm text-white"
+                      >
+                        Simpan Profile
+                      </button>
+                    </div>
+                  )}
 
                   {accountProfiles.length === 0 ? (
                     <p className="mt-2 text-sm text-gray-500">
@@ -368,85 +421,91 @@ const activeProfiles = profiles.filter(
                     </p>
                   ) : (
                     <div className="mt-3 grid gap-3 md:grid-cols-3">
-{accountProfiles.map((profile) => {
-  const statusInfo = {
-    AVAILABLE: {
-      label: "🟢 Available",
-      className:
-        "bg-green-50 text-green-700",
-    },
-    ACTIVE: {
-      label: "🔵 Active",
-      className:
-        "bg-blue-50 text-blue-700",
-    },
-  }[profile.status] ?? {
-    label: profile.status,
-    className:
-      "bg-gray-100 text-gray-700",
-  };
+                      {accountProfiles.map((profile) => {
+                        const statusInfo = {
+                          AVAILABLE: {
+                            label: "🟢 Available",
+                            className:
+                              "bg-green-50 text-green-700",
+                          },
+                          ACTIVE: {
+                            label: "🔵 Active",
+                            className:
+                              "bg-blue-50 text-blue-700",
+                          },
+                        }[profile.status] ?? {
+                          label: profile.status,
+                          className:
+                            "bg-gray-100 text-gray-700",
+                        };
 
-const expiryText = profile.expires_at
-  ? new Date(
-      profile.expires_at
-    ).toLocaleString("id-ID", {
-      timeZone: "Asia/Jakarta",
-      dateStyle: "medium",
-      timeStyle: "short",
-    })
-  : "-";
+                        const expiryText =
+                          profile.expires_at
+                            ? new Date(
+                                profile.expires_at
+                              ).toLocaleString("id-ID", {
+                                timeZone: "Asia/Jakarta",
+                                dateStyle: "medium",
+                                timeStyle: "short",
+                              })
+                            : "-";
 
-  return (
-  <div className="rounded-xl border bg-white p-5 shadow-sm">
-    <div className="flex items-start justify-between">
-      <div>
-        <p className="text-xs text-gray-500">
-          {profile.accounts?.[0]?.products?.[0]?.name ??
-            "Product"}
-        </p>
+                        return (
+                          <div
+                            key={profile.id}
+                            className="rounded-xl border bg-white p-5 shadow-sm"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <p className="text-xs text-gray-500">
+                                  {profile.accounts?.[0]
+                                    ?.products?.[0]?.name ??
+                                    "Product"}
+                                </p>
 
-        <h3 className="mt-1 text-lg font-semibold">
-          {profile.profile_name}
-        </h3>
+                                <h3 className="mt-1 text-lg font-semibold">
+                                  {profile.profile_name}
+                                </h3>
 
-        <p className="text-sm text-gray-500">
-          {profile.accounts?.[0]?.email ?? "-"}
-        </p>
-      </div>
+                                <p className="text-sm text-gray-500">
+                                  {profile.accounts?.[0]
+                                    ?.email ?? "-"}
+                                </p>
+                              </div>
 
-      <span
-        className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusInfo.className}`}
-      >
-        {statusInfo.label}
-      </span>
-    </div>
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusInfo.className}`}
+                              >
+                                {statusInfo.label}
+                              </span>
+                            </div>
 
-    <div className="mt-4 grid grid-cols-2 gap-4">
-      <div>
-        <p className="text-xs text-gray-500">
-          PIN
-        </p>
+                            <div className="mt-4 grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-xs text-gray-500">
+                                  PIN
+                                </p>
 
-        <p className="mt-1 font-medium">
-          {profile.pin || "-"}
-        </p>
-      </div>
+                                <p className="mt-1 font-medium">
+                                  {profile.pin || "-"}
+                                </p>
+                              </div>
 
-      <div>
-        <p className="text-xs text-gray-500">
-          Expires
-        </p>
+                              <div>
+                                <p className="text-xs text-gray-500">
+                                  Expires
+                                </p>
 
-        <p className="mt-1 text-sm font-medium">
-          {profile.status === "ACTIVE"
-            ? expiryText
-            : "-"}
-        </p>
-      </div>
-    </div>
-  </div>
-);
-})}
+                                <p className="mt-1 text-sm font-medium">
+                                  {profile.status === "ACTIVE"
+                                    ? expiryText
+                                    : "-"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
